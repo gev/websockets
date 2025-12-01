@@ -33,7 +33,8 @@ import qualified Data.ByteString.Base64                as B64
 import           Data.ByteString.Char8                 ()
 import qualified Data.ByteString.Lazy                  as BL
 import           Data.Digest.Pure.SHA                  (bytestringDigest, sha1)
-import           Data.IORef
+import           Data.List                             (mapAccumL)
+
 import           Data.Monoid                           (mappend, mconcat,
                                                         mempty)
 import           Data.Tuple                            (swap)
@@ -79,7 +80,7 @@ finishResponse request response = do
     --
     -- But we don't check it for now
     when (responseCode response == 400) $ Left $
-        RequestRejected request response 
+        RequestRejected request response
     when (responseCode response /= 101) $ Left $
         MalformedResponse response "Wrong response status or message."
 
@@ -115,10 +116,9 @@ encodeMessages
     -> Stream
     -> IO ([Message] -> IO ())
 encodeMessages conType stream = do
-    genRef <- newIORef =<< newStdGen
+    gen0 <- newStdGen
     return $ \msgs -> do
-        builders <- forM msgs $ \msg ->
-          atomicModifyIORef' genRef $ \s -> encodeMessage conType s msg
+        let (_, builders) = mapAccumL (encodeMessage conType) gen0 msgs
         Stream.write stream (B.toLazyByteString $ mconcat builders)
 
 
@@ -167,20 +167,17 @@ decodeMessages
     -> Stream
     -> IO (IO (Maybe Message))
 decodeMessages frameLimit messageLimit stream = do
-    dmRef <- newIORef emptyDemultiplexState
-    return $ go dmRef
-  where
-    go dmRef = do
-        mbFrame <- Stream.parseBin stream (parseFrame frameLimit)
-        case mbFrame of
-            Nothing    -> return Nothing
-            Just frame -> do
-                demultiplexResult <- atomicModifyIORef' dmRef $
-                    \s -> swap $ demultiplex messageLimit s frame
-                case demultiplexResult of
-                    DemultiplexError err    -> throwIO err
-                    DemultiplexContinue     -> go dmRef
-                    DemultiplexSuccess  msg -> return (Just msg)
+    pure $ go emptyDemultiplexState
+    where
+         go !st = do
+          mbFrame <- Stream.parseBin stream (parseFrame frameLimit)
+          case mbFrame of
+            Nothing -> pure Nothing
+            Just frame -> case demultiplex messageLimit st frame of
+              (DemultiplexError err,   _) -> throwIO err
+              (DemultiplexContinue,   st') -> go st'
+              (DemultiplexSuccess msg, _) -> pure (Just msg)
+
 
 
 --------------------------------------------------------------------------------
