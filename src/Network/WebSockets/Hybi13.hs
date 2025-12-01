@@ -50,6 +50,7 @@ import           Network.WebSockets.Hybi13.Mask
 import           Network.WebSockets.Stream             (Stream)
 import qualified Network.WebSockets.Stream             as Stream
 import           Network.WebSockets.Types
+import Data.Foldable (traverse_)
 
 
 --------------------------------------------------------------------------------
@@ -119,7 +120,8 @@ encodeMessages conType stream = do
     gen0 <- newStdGen
     return $ \msgs -> do
         let (_, !builders) = mapAccumL (encodeMessage conType) gen0 msgs
-        Stream.write stream (B.toLazyByteString $ mconcat builders)
+        -- Stream.write stream (B.toLazyByteString $ mconcat builders)
+        traverse_ (Stream.write stream . B.toLazyByteString) builders
 
 
 --------------------------------------------------------------------------------
@@ -173,7 +175,7 @@ decodeMessages frameLimit messageLimit stream = do
           !mbFrame <- Stream.parseBin stream (parseFrame frameLimit)
           case mbFrame of
             Nothing -> pure Nothing
-            Just frame -> case demultiplex messageLimit st frame of
+            Just !frame -> case demultiplex messageLimit st frame of
               (DemultiplexError err,   _) -> throwIO err
               (DemultiplexContinue,   !st') -> go st'
               (DemultiplexSuccess !msg, _) -> pure (Just msg)
