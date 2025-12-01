@@ -18,11 +18,9 @@ module Network.WebSockets.Hybi13
 
 --------------------------------------------------------------------------------
 import qualified Data.ByteString.Builder               as B
-import           Control.Applicative                   (pure, (<$>))
 import           Control.Arrow                         (first)
 import           Control.Exception                     (throwIO)
-import           Control.Monad                         (forM, liftM, unless,
-                                                        when)
+import           Control.Monad                         (liftM, unless,when)
 import           Data.Binary.Get                       (Get, getInt64be,
                                                         getLazyByteString,
                                                         getWord16be, getWord8)
@@ -35,9 +33,6 @@ import qualified Data.ByteString.Lazy                  as BL
 import           Data.Digest.Pure.SHA                  (bytestringDigest, sha1)
 import           Data.List                             (mapAccumL)
 
-import           Data.Monoid                           (mappend, mconcat,
-                                                        mempty)
-import           Data.Tuple                            (swap)
 import           System.Entropy                        as R
 import           System.Random                         (RandomGen, newStdGen)
 
@@ -51,6 +46,7 @@ import           Network.WebSockets.Stream             (Stream)
 import qualified Network.WebSockets.Stream             as Stream
 import           Network.WebSockets.Types
 import Data.Foldable (traverse_)
+import Data.Text.Internal.Lazy (chunk)
 
 
 --------------------------------------------------------------------------------
@@ -95,14 +91,14 @@ finishResponse request response = do
 
 
 --------------------------------------------------------------------------------
-encodeMessage :: RandomGen g => ConnectionType -> g -> Message -> (g, B.Builder)
-encodeMessage conType gen msg = (gen', builder)
+encodeMessage :: RandomGen g => ConnectionType -> g -> Message -> (g, BL.ByteString)
+encodeMessage conType gen msg = (gen', chunk)
   where
     mkFrame      = Frame True False False False
     (mask, gen') = case conType of
         ServerConnection -> (Nothing, gen)
         ClientConnection -> first Just (randomMask gen)
-    builder      = encodeFrame mask $ case msg of
+    chunk      = encodeFrame mask $ case msg of
         (ControlMessage (Close code pl)) -> mkFrame CloseFrame $
             runPut (putWord16be code) `mappend` pl
         (ControlMessage (Ping pl))               -> mkFrame PingFrame   pl
@@ -119,16 +115,20 @@ encodeMessages
 encodeMessages conType stream = do
     gen0 <- newStdGen
     return $ \msgs -> do
-        let (_, !builders) = mapAccumL (encodeMessage conType) gen0 msgs
+        let (_, !chunks) = mapAccumL (encodeMessage conType) gen0 msgs
         -- Stream.write stream (B.toLazyByteString $ mconcat builders)
-        traverse_ (Stream.write stream . B.toLazyByteString) builders
+        traverse_ (Stream.write stream) chunks
 
 
 --------------------------------------------------------------------------------
-encodeFrame :: Maybe Mask -> Frame -> B.Builder
-encodeFrame mask f = B.word8 byte0 `mappend`
-    B.word8 byte1 `mappend` len `mappend` maskbytes `mappend`
-    B.lazyByteString (maskPayload mask payload)
+encodeFrame :: Maybe Mask -> Frame -> BL.ByteString
+encodeFrame mask f = B.toLazyByteString $ mconcat
+    [ B.word8 byte0
+    , B.word8 byte1
+    , len
+    , maskbytes
+    , B.lazyByteString (maskPayload mask payload)
+    ]
   where
 
     byte0  = fin .|. rsv1 .|. rsv2 .|. rsv3 .|. opcode
