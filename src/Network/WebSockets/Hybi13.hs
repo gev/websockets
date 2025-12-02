@@ -46,7 +46,6 @@ import           Network.WebSockets.Stream             (Stream)
 import qualified Network.WebSockets.Stream             as Stream
 import           Network.WebSockets.Types
 import Data.Foldable (traverse_)
-import Data.Text.Internal.Lazy (chunk)
 
 
 --------------------------------------------------------------------------------
