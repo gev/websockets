@@ -31,6 +31,7 @@ import qualified Data.ByteString.Base64                as B64
 import           Data.ByteString.Char8                 ()
 import qualified Data.ByteString.Lazy                  as BL
 import           Data.Digest.Pure.SHA                  (bytestringDigest, sha1)
+import           Data.Foldable                         (traverse_)
 import           Data.List                             (mapAccumL)
 
 import           System.Entropy                        as R
@@ -45,7 +46,6 @@ import           Network.WebSockets.Hybi13.Mask
 import           Network.WebSockets.Stream             (Stream)
 import qualified Network.WebSockets.Stream             as Stream
 import           Network.WebSockets.Types
-import Data.Foldable (traverse_)
 
 
 --------------------------------------------------------------------------------
