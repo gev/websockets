@@ -113,10 +113,14 @@ encodeMessages
     -> IO ([Message] -> IO ())
 encodeMessages conType stream = do
     gen0 <- newStdGen
-    return $ \msgs -> do
-        let (_, !chunks) = mapAccumL (encodeMessage conType) gen0 msgs
-        -- Stream.write stream (B.toLazyByteString $ mconcat builders)
-        traverse_ (Stream.write stream) chunks
+    pure $ \msgs -> go gen0 msgs
+  where 
+      go _   []     = pure ()
+      go !gen (m:ms) = do
+          let (!gen', !chunk) = encodeMessage conType gen m
+          Stream.write stream chunk
+          go gen' ms
+        
 
 
 --------------------------------------------------------------------------------
