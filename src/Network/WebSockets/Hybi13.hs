@@ -90,7 +90,7 @@ finishResponse request response = do
 
 
 --------------------------------------------------------------------------------
-encodeMessage :: RandomGen g => ConnectionType -> g -> Message -> (g, BL.ByteString)
+encodeMessage :: RandomGen g => ConnectionType -> g -> Message -> (g, B.Builder)
 encodeMessage conType gen msg = (gen', chunk)
   where
     mkFrame      = Frame True False False False
@@ -118,20 +118,15 @@ encodeMessages conType stream = do
       go _   []     = pure ()
       go !gen (m:ms) = do
           let (!gen', !chunk) = encodeMessage conType gen m
-          Stream.write stream chunk
+          Stream.write stream $ B.toLazyByteString chunk
           go gen' ms
         
 
 
 --------------------------------------------------------------------------------
-encodeFrame :: Maybe Mask -> Frame -> BL.ByteString
-encodeFrame mask f = B.toLazyByteString $ mconcat
-    [ B.word8 byte0
-    , B.word8 byte1
-    , len
-    , maskbytes
-    , B.lazyByteString (maskPayload mask payload)
-    ]
+encodeFrame :: Maybe Mask -> Frame -> B.Builder
+encodeFrame mask f = B.word8 byte0 <>  B.word8 byte1 <> len <> maskbytes <>
+     B.lazyByteString (maskPayload mask payload)
   where
 
     byte0  = fin .|. rsv1 .|. rsv2 .|. rsv3 .|. opcode
