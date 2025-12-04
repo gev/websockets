@@ -117,7 +117,7 @@ makeSocketStream :: S.Socket -> IO Stream
 makeSocketStream socket = makeStream receive send
   where
     receive = do
-        bs <- try $ SB.recv socket 1024
+        bs <- try $ SB.recv socket 8192
         case bs of
             -- If the resource vanished, the socket was closed
             Left e | isResourceVanishedError e -> return Nothing
